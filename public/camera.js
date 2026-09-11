@@ -48,6 +48,7 @@
   let reconnectTimer = null;
   let intentionalClose = false;
   let rotation = 0; // degrees: 0, 90, 180, 270 — applied by redrawing each frame
+  let currentZoom = 1;
 
   // The camera's raw frames are drawn onto previewCanvas (rotated), and THAT
   // canvas is what gets streamed out and what photos are captured from — not
@@ -186,6 +187,7 @@
   }
 
   function setupDataChannel(dc) {
+    dc.binaryType = 'arraybuffer';
     dc.addEventListener('open', () => {
       sendCapabilities();
       dc.send(JSON.stringify({ type: 'rotation-changed', degrees: rotation }));
@@ -209,6 +211,7 @@
       case 'zoom': {
         try {
           await track.applyConstraints({ advanced: [{ zoom: cmd.value }] });
+          currentZoom = cmd.value;
         } catch (err) {
           console.warn('zoom not supported', err);
         }
@@ -269,7 +272,7 @@
   async function switchCamera() {
     currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
     const newStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: currentFacingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      video: { facingMode: currentFacingMode, width: { ideal: 3840 }, height: { ideal: 2160 } },
       audio: false,
     });
 
@@ -279,16 +282,53 @@
     localStream.getVideoTracks().forEach((t) => t.stop());
     localStream = newStream;
     sourceVideo.srcObject = localStream;
+    currentZoom = 1; // a fresh track always starts unzoomed
     sendCapabilities();
   }
 
   async function capturePhoto() {
-    // previewCanvas is the exact rotated frame being streamed right now (see
-    // drawFrame above), so snapshotting it directly guarantees the photo
-    // matches the live view — zoom, rotation, and all — with no separate
-    // capture pipeline to fall out of sync with.
-    const blob = await new Promise((resolve) => previewCanvas.toBlob(resolve, 'image/jpeg', 0.95));
+    // takePhoto() uses the phone's native still-capture pipeline, which can
+    // reach far higher resolution/quality than the continuous getUserMedia
+    // video feed — but (per earlier testing) it doesn't reliably honor the
+    // digital zoom applied to the live track, so it's only trustworthy at
+    // 1x. Away from 1x, previewCanvas (the exact zoomed+rotated frame being
+    // streamed) is the only pipeline guaranteed to match what's on screen.
+    const track = localStream && localStream.getVideoTracks()[0];
+    let blob = null;
+
+    if (currentZoom === 1 && track && 'ImageCapture' in window) {
+      try {
+        const capture = new ImageCapture(track);
+        blob = await capture.takePhoto();
+        if (rotation !== 0) blob = await rotateBlob(blob, rotation);
+      } catch (err) {
+        console.warn('native takePhoto() failed, falling back to stream snapshot', err);
+        blob = null;
+      }
+    }
+
+    if (!blob) {
+      blob = await new Promise((resolve) => previewCanvas.toBlob(resolve, 'image/jpeg', 0.95));
+    }
     await sendPhoto(blob);
+  }
+
+  // takePhoto() reads the raw, unrotated sensor track, so a still taken while
+  // rotated needs the same rotation applied afterward — at full resolution,
+  // via one extra canvas pass, rather than through the (lower-res) preview
+  // pipeline.
+  async function rotateBlob(blob, degrees) {
+    const bitmap = await createImageBitmap(blob);
+    const swapped = degrees % 180 !== 0;
+    const canvas = document.createElement('canvas');
+    canvas.width = swapped ? bitmap.height : bitmap.width;
+    canvas.height = swapped ? bitmap.width : bitmap.height;
+    const ctx = canvas.getContext('2d');
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((degrees * Math.PI) / 180);
+    ctx.drawImage(bitmap, -bitmap.width / 2, -bitmap.height / 2);
+    bitmap.close();
+    return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95));
   }
 
   const BUFFERED_AMOUNT_LOW = 256 * 1024;
@@ -301,18 +341,19 @@
     });
   }
 
+  // Sent as raw binary chunks rather than base64-in-JSON: base64 both adds
+  // ~33% to the transfer size and costs real CPU time to build via a JS loop
+  // — negligible for a 1080p JPEG, but noticeable for a multi-megabyte
+  // native-resolution still. RTCDataChannel sends ArrayBuffers natively, so
+  // there's no reason to pay that cost.
   async function sendPhoto(blob) {
     const buffer = await blob.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-    const base64 = btoa(binary);
+    const CHUNK = 65536; // 64KB — comfortably under typical data channel message limits
 
-    const CHUNK = 12000;
-    dataChannel.send(JSON.stringify({ type: 'photo-start', mime: blob.type, size: base64.length }));
-    for (let i = 0; i < base64.length; i += CHUNK) {
+    dataChannel.send(JSON.stringify({ type: 'photo-start', mime: blob.type, size: buffer.byteLength }));
+    for (let offset = 0; offset < buffer.byteLength; offset += CHUNK) {
       await waitForBufferDrain();
-      dataChannel.send(JSON.stringify({ type: 'photo-chunk', data: base64.slice(i, i + CHUNK) }));
+      dataChannel.send(buffer.slice(offset, offset + CHUNK));
     }
     dataChannel.send(JSON.stringify({ type: 'photo-end' }));
   }
@@ -335,7 +376,7 @@
     startBtn.disabled = true;
     try {
       localStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: currentFacingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: { facingMode: currentFacingMode, width: { ideal: 3840 }, height: { ideal: 2160 } },
         audio: false,
       });
       sourceVideo.srcObject = localStream;

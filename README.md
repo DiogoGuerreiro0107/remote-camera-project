@@ -62,9 +62,13 @@ a real phone reaching over the LAN.
 
 ## Controls
 
-- **Take Photo** — snapshots the exact frame currently being streamed
-  (post-rotation, post-zoom) and sends it back over the data channel; it
-  appears as a downloadable thumbnail.
+- **Take Photo** — at 1x zoom, uses the phone's native still-capture API for
+  a genuinely high-resolution photo (well beyond the live stream's own
+  resolution), corrected for rotation if needed; zoomed in, it instead
+  snapshots the exact frame being streamed (the only pipeline guaranteed to
+  match an applied zoom). Either way it's sent back over the data channel as
+  raw binary — not base64 — and appears as a downloadable thumbnail, with a
+  progress readout on the button for larger photos.
 - **Record** — records the *received* video stream locally in the browser via
   `MediaRecorder`, writing straight to a file you pick (via the File System
   Access API) so a crash mid-recording loses at most ~1s, not the whole clip.
@@ -177,6 +181,10 @@ the phone you're already holding.
   single pairing slot.
 - **Not the stock camera app.** You get whatever Chrome's WebRTC/camera APIs
   expose — no manufacturer HDR/night-mode/RAW processing.
+- **4K capture costs more battery/CPU.** The camera requests up to 3840×2160
+  continuously (for both the live stream and stream-based photos), which is
+  heavier than the earlier 1080p default — worth knowing if the camera phone
+  runs hot or the stream gets choppy on an older device.
 
 ## Configuration
 

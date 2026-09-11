@@ -142,6 +142,7 @@
 
     pc.ondatachannel = (event) => {
       dataChannel = event.channel;
+      dataChannel.binaryType = 'arraybuffer';
       dataChannel.addEventListener('message', onDataChannelMessage);
     };
 
@@ -159,6 +160,18 @@
   }
 
   function onDataChannelMessage(event) {
+    // Photo bytes arrive as raw binary messages (not base64-in-JSON, to avoid
+    // both the size overhead and the CPU cost of encoding/decoding — see
+    // camera.js's sendPhoto), interleaved with JSON control messages.
+    if (event.data instanceof ArrayBuffer) {
+      if (incomingPhoto) {
+        incomingPhoto.chunks.push(event.data);
+        incomingPhoto.received += event.data.byteLength;
+        updatePhotoProgress();
+      }
+      return;
+    }
+
     const msg = JSON.parse(event.data);
     if (msg.type === 'capabilities') {
       applyCapabilities(msg.caps || {});
@@ -171,18 +184,22 @@
         setTimeout(() => setStatus('streaming', 'connected'), 2500);
       }
     } else if (msg.type === 'photo-start') {
-      incomingPhoto = { mime: msg.mime || 'image/jpeg', chunks: [] };
-    } else if (msg.type === 'photo-chunk' && incomingPhoto) {
-      incomingPhoto.chunks.push(msg.data);
+      incomingPhoto = { mime: msg.mime || 'image/jpeg', size: msg.size || 0, received: 0, chunks: [] };
+      photoBtn.disabled = true;
+      updatePhotoProgress();
     } else if (msg.type === 'photo-end' && incomingPhoto) {
-      const base64 = incomingPhoto.chunks.join('');
-      const binary = atob(base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const blob = new Blob([bytes], { type: incomingPhoto.mime });
+      const blob = new Blob(incomingPhoto.chunks, { type: incomingPhoto.mime });
       addThumb(blob);
       incomingPhoto = null;
+      photoBtn.disabled = false;
+      photoBtn.textContent = '📷 Take Photo';
     }
+  }
+
+  function updatePhotoProgress() {
+    if (!incomingPhoto || !incomingPhoto.size) return;
+    const pct = Math.min(100, Math.round((incomingPhoto.received / incomingPhoto.size) * 100));
+    photoBtn.textContent = `📷 Receiving… ${pct}%`;
   }
 
   function applyCapabilities(caps) {
