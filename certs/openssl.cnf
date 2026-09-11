@@ -1,0 +1,22 @@
+[req]
+distinguished_name = req_distinguished_name
+x509_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+CN = remote-camera.local
+
+[v3_req]
+keyUsage = keyEncipherment, dataEncipherment, digitalSignature
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = localhost
+IP.1 = 127.0.0.1
+IP.2 = 192.168.50.10
+# Android's built-in Hotspot feature almost always gives itself this address
+# as the gateway, regardless of which phone is hosting it or what IP the
+# connecting client gets assigned — covering it here means the same
+# certificate works both at home (IP.2 above) and on a phone hotspot outside.
+IP.3 = 192.168.43.1

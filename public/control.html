@@ -1,0 +1,43 @@
+<title>Remote Camera — Control</title>
+<link rel="stylesheet" href="style.css" />
+
+<div class="wrap">
+  <h1>Remote Camera <span id="status" class="status">disconnected</span></h1>
+
+  <div class="video-wrap">
+    <video id="remote" autoplay playsinline muted></video>
+    <div id="focusRing" class="focus-ring" hidden></div>
+  </div>
+  <button id="tapToPlay" class="primary" style="display:none; width:100%; margin-top:8px">▶ Tap to start preview</button>
+
+  <div class="panel" id="setup">
+    <div class="row">
+      <label>PIN</label>
+      <input type="text" id="pin" placeholder="6-char pin from server console" />
+      <button class="primary" id="connectBtn">Connect</button>
+    </div>
+  </div>
+
+  <div class="panel" id="controls" style="display:none">
+    <div class="row">
+      <button id="photoBtn">📷 Take Photo</button>
+      <button id="recordBtn">⏺ Record</button>
+      <button id="torchBtn" style="display:none">🔦 Torch</button>
+      <button id="switchBtn">⇄ Switch Camera</button>
+      <button id="rotateBtn">⟳ Rotate</button>
+    </div>
+    <div class="row" id="zoomRow" style="display:none">
+      <label>Zoom</label>
+      <input type="range" id="zoomSlider" min="1" max="8" step="0.1" value="1" />
+      <span id="zoomValue">1.0×</span>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="panel" id="captures" style="display:none">
+    <div class="row"><label>Captures</label></div>
+    <div class="thumbs" id="thumbs"></div>
+  </div>
+</div>
+
+<script src="control.js"></script>

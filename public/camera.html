@@ -1,0 +1,27 @@
+<title>Remote Camera — Camera</title>
+<link rel="stylesheet" href="style.css" />
+
+<div class="wrap">
+  <h1>Camera <span id="status" class="status">disconnected</span></h1>
+
+  <canvas id="preview"></canvas>
+  <video id="sourceVideo" autoplay playsinline muted style="display:none"></video>
+
+  <div class="panel" id="setup">
+    <div class="row">
+      <label>PIN</label>
+      <input type="text" id="pin" placeholder="6-char pin from server console" />
+    </div>
+    <div class="row">
+      <button class="primary" id="startBtn">Start Camera</button>
+    </div>
+    <p class="hint">
+      Grant camera permission when prompted. Keep this tab open and the screen on
+      (a wake lock is requested automatically once the camera starts).
+    </p>
+  </div>
+
+  <div class="stats" id="stats"></div>
+</div>
+
+<script src="camera.js"></script>

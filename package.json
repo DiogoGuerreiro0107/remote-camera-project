@@ -1,0 +1,13 @@
+{
+  "name": "remote-camera-project",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Turn a phone's camera into a remote-controllable camera, accessed from Chrome",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
