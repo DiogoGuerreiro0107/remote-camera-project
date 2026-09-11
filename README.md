@@ -101,32 +101,42 @@ phone and having it host the hotspot too:
    (If you haven't pushed this project anywhere yet, push it to a GitHub repo
    from your PC first — simplest way to get it onto the phone. `adb push`
    over USB is a fine alternative if you'd rather skip git.)
-3. **Generate the certificate on the phone.** `certs/*.pem` are gitignored on
-   purpose — a private key has no business being committed to a repo — so
-   cloning brings over `certs/openssl.cnf` but not the actual cert. Generate
-   it once, using that same config (it already covers the hotspot IP below):
+3. **Turn on Hotspot** (Settings → Network & internet → Hotspot & tethering)
+   and **find its gateway IP** — this is the address your phone gives itself
+   while hosting the hotspot. It's supposed to be a fixed, predictable value
+   (Android used to standardize on `192.168.43.1`, but that's no longer
+   reliable across devices/versions — check yours rather than assuming).
+   In Termux, with the hotspot on:
+   ```bash
+   ip addr show wlan0
+   ```
+   and look for the `inet` address. Confirm it stays the same by toggling
+   the hotspot off and back on and checking again — this whole approach
+   depends on that address being stable for your specific phone.
+4. **Add that IP to the certificate config and generate the cert on the
+   phone** (`certs/*.pem` are gitignored on purpose — a private key has no
+   business being committed to a repo — so cloning brings over
+   `certs/openssl.cnf` but not the actual cert files):
    ```bash
    cd certs
+   # edit openssl.cnf: add a line like "IP.5 = <your gateway IP>" under [alt_names]
    openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 3650 -nodes -config openssl.cnf
    cd ..
    ```
-4. **Every time you're heading out:**
-   - Turn on your normal phone's **Hotspot** (Settings → Network & internet →
-     Hotspot & tethering). Android's hotspot feature gives itself the fixed
-     address `192.168.43.1` essentially always, regardless of what IP the
-     connecting phone gets — that fixed address is what makes this work
-     without ever typing an IP.
+5. **Every time you're heading out:**
+   - Turn on your normal phone's **Hotspot**.
    - In Termux: `termux-wake-lock && npm start` (the wake lock stops Android
      from throttling Termux's CPU while the screen is off or you switch to
      another app).
    - Connect the **broken phone's** WiFi to your normal phone's hotspot.
 
-5. **One-time setup on the broken phone** (do this once, e.g. at home first by
+6. **One-time setup on the broken phone** (do this once, e.g. at home first by
    turning the hotspot on there too): open
-   `https://192.168.43.1:8443/camera.html`, accept the certificate warning,
-   enter the PIN once, tap Start Camera, and grant camera permission. Then in
-   Chrome's menu, **"Add to Home screen"** for that page — this creates an
-   icon that reopens straight to that exact URL, with no app install.
+   `https://<your gateway IP>:8443/camera.html`, accept the certificate
+   warning, enter the PIN once, tap Start Camera, and grant camera
+   permission. Then in Chrome's menu, **"Add to Home screen"** for that page
+   — this creates an icon that reopens straight to that exact URL, with no
+   app install.
 
    From then on, tapping that home-screen icon does everything automatically:
    both pages remember their PIN and auto-connect on load, and `camera.html`
@@ -138,9 +148,11 @@ Why no typing is needed, mechanically: the PIN is remembered in the browser's
 `localStorage` (cleared automatically if it's ever rejected) and now also
 persisted on the *server* side to a `.pin` file, so restarting `npm start` in
 Termux keeps handing out the same PIN — the home-screen shortcut never goes
-stale. The IP never needs to be looked up because the hotspot's gateway
-address is fixed. The only manual step every outing is starting the server in
-Termux and turning the hotspot on, both on the phone you're already holding.
+stale. The IP never needs to be looked up on the day because the hotspot's
+gateway address is fixed *for your phone* (verified in step 3) — it's a
+one-time lookup, not a one-time-per-outing one. The only manual step every
+outing is starting the server in Termux and turning the hotspot on, both on
+the phone you're already holding.
 
 **A couple of things worth flagging honestly:**
 - Android is often aggressive about killing backgrounded processes to save
@@ -148,13 +160,9 @@ Termux and turning the hotspot on, both on the phone you're already holding.
   after a while, go to Settings → Apps → Termux → Battery and set it to
   **Unrestricted**.
 - The controller (viewing/controlling the stream) would also run in Chrome on
-  this same normal phone in this setup — `https://192.168.43.1:8443/control.html`
+  this same normal phone in this setup — `https://<your gateway IP>:8443/control.html`
   — since it's now also the server. Running Termux + the server + Chrome all
   on one phone is normal and should be fine performance-wise.
-- If your phone's hotspot happens to use a different gateway IP than
-  `192.168.43.1` (rare, but some OEM skins vary), check it once under the
-  hotspot settings or your phone's WiFi IP config, and use that instead
-  throughout.
 
 ## Known limitations
 
@@ -185,10 +193,12 @@ keeps a bookmarked/home-screen shortcut valid across server restarts. Delete
 
 ## Regenerating the certificate
 
-The current certificate already covers `localhost`, `127.0.0.1`, the home LAN
-IP, and the Android hotspot gateway (`192.168.43.1`) — one cert works for all
-of them. If your home LAN IP changes, or you need to add another address,
-edit `certs/openssl.cnf` (add/update the `IP.*` lines under `[alt_names]`)
+`certs/openssl.cnf` lists every address the cert should be valid for —
+`localhost`, `127.0.0.1`, the home LAN IP, and a couple of example hotspot
+gateway IPs (yours may well be different — see "Using it outside" above for
+how to find it). One cert can cover all of them at once. If your home LAN IP
+changes, or you need to add another address, edit `certs/openssl.cnf`
+(add/update the `IP.*` lines under `[alt_names]`)
 and regenerate:
 
 ```bash
