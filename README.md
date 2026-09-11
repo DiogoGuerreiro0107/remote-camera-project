@@ -93,17 +93,23 @@ phone and having it host the hotspot too:
    needs installing, and it's on the phone you *can* install things on.
 2. **In Termux**, install Node and get the project onto the phone:
    ```bash
-   pkg update && pkg install nodejs git
+   pkg update && pkg install nodejs git openssl-tool
    git clone <your-repo-url> remote-camera-project
    cd remote-camera-project
    npm install --no-optional
    ```
-   (If you haven't pushed this project anywhere yet, push it to a private
-   GitHub repo from your PC first — simplest way to get it onto the phone.
-   `adb push` over USB is a fine alternative if you'd rather skip git.)
-3. **The certificate needs no changes** — the one already in this repo covers
-   the hotspot IP used below, so the same `certs/` folder you clone works
-   as-is on the phone.
+   (If you haven't pushed this project anywhere yet, push it to a GitHub repo
+   from your PC first — simplest way to get it onto the phone. `adb push`
+   over USB is a fine alternative if you'd rather skip git.)
+3. **Generate the certificate on the phone.** `certs/*.pem` are gitignored on
+   purpose — a private key has no business being committed to a repo — so
+   cloning brings over `certs/openssl.cnf` but not the actual cert. Generate
+   it once, using that same config (it already covers the hotspot IP below):
+   ```bash
+   cd certs
+   openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 3650 -nodes -config openssl.cnf
+   cd ..
+   ```
 4. **Every time you're heading out:**
    - Turn on your normal phone's **Hotspot** (Settings → Network & internet →
      Hotspot & tethering). Android's hotspot feature gives itself the fixed
